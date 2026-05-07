@@ -418,7 +418,7 @@ For special keys the second arg names the key directly:
 ```bash
 tmux send-keys -t <S>:<W> Enter         # submit
 tmux send-keys -t <S>:<W> C-c           # Ctrl+C — cancel current operation
-tmux send-keys -t <S>:<W> C-d           # Ctrl+D — EOF / exit
+tmux send-keys -t <S>:<W> C-d           # Ctrl+D — EOF (NOT a clean TUI exit; see Tear-down)
 tmux send-keys -t <S>:<W> C-l           # Ctrl+L — clear screen
 tmux send-keys -t <S>:<W> BSpace        # Backspace
 tmux send-keys -t <S>:<W> Escape        # ESC
@@ -505,8 +505,33 @@ tmux capture-pane -t <S>:<W> -p | tail -1
 
 When the workspace is no longer needed:
 
-1. Close the TUI: send `Ctrl+D` to the pane (clean disconnect; daemon emits SessionTerminatedEvent).
-2. Close the tmux window: `tmux kill-window -t <session>:<idx>`.
-3. (Optional) `rm -rf <workspace>` — the workspace is application-owned, no daemon-side cleanup needed beyond the session log already written there.
+1. **Close the TUI by typing `exit` at the User> prompt.**  This is the
+   ONLY clean-disconnect path.  Tmux equivalent:
 
-The daemon survives across workspace tear-downs. Don't restart it unless the test was specifically about post-restart behavior.
+   ```bash
+   tmux send-keys -t <pane> 'exit'
+   sleep 1
+   tmux send-keys -t <pane> Enter
+   sleep 3
+   tmux capture-pane -t <pane> -p | tail -5  # confirm shell prompt
+   ```
+
+   **Do NOT use `Ctrl+D` for this.**  Despite being mapped to `exit` in
+   `keybindings.py`, the Ctrl+D handler raises `EOFError` via
+   `event.app.exit(exception=EOFError())`, which propagates as an
+   unhandled Python stack trace through prompt_toolkit's run loop —
+   not a clean shutdown.  The capture will end with a traceback ending
+   in `EOFError`; easy to misread as "clean" if you only glance.
+
+   **Do NOT use `Ctrl+C` either.**  That's `cancel` — interrupts the
+   current turn, leaves the TUI alive at the User> prompt.
+
+2. Close the tmux window: `tmux kill-window -t <session>:<idx>`.
+3. (Optional) `rm -rf <workspace>` — the workspace is application-owned,
+   no daemon-side cleanup needed beyond the session log already written
+   there.
+
+The daemon survives across workspace tear-downs.  Don't restart it
+unless the test was specifically about post-restart behavior (e.g.,
+verifying that a freshly-shipped framework change loads cleanly via
+the editable install).
