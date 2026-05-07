@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# IDE / editor caches
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Per-session jaato runtime state — not source.
+# (Sessions, logs, cache get re-created per run; no need to track.)
+.jaato/sessions/
+.jaato/logs/
+.jaato/cache/
+.jaato/vision/
+.jaato/waypoints.json
+
+# Auth tokens persisted by provider plugins — never commit.
+.jaato/*_auth.json
