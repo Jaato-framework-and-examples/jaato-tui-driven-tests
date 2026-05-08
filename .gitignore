@@ -19,6 +19,17 @@ Thumbs.db
 .jaato/cache/
 .jaato/vision/
 .jaato/waypoints.json
+.jaato/.artifact_tracker.json
 
 # Auth tokens persisted by provider plugins — never commit.
 .jaato/*_auth.json
+
+# Audit sidecars + auto-generated walkthrough sections written by
+# the manual_writer reactor.  Both are derived from the agent's
+# typed payload per run; only the hand-written manual/00-intro.md
+# is source.
+manual/.payloads/
+manual/20-walkthrough-*.md
+
+# Build outputs (PDF + assembled markdown) — derived from manual/.
+build/

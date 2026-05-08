@@ -1,0 +1,47 @@
+name: manual_writer
+description: >-
+  Reads a TUI scene capture from its initial prompt and emits a typed
+  documentation payload.  A reactor renders the markdown.  Single-shot
+  (max_turns=1) — body-wired determinism stack.
+model: anthropic/claude-haiku-4.5
+provider: openrouter
+max_turns: 6
+gc:
+  type: budget
+  threshold_percent: 80.0
+  target_percent: 60.0
+  pressure_percent: 0
+  preserve_recent_turns: 3
+  notify_on_gc: false
+plugins:
+- file_edit(preload)
+completion_payload_schema: completion_schemas/manual_writer.json
+plugin_configs:
+  openrouter:
+    # api_key not set here — JAATO_OPENROUTER_API_KEY in the workspace
+    # .env (resolved via pass://) is the canonical source.  Server 0.6.64
+    # made .env values pass through expand_variables so secret URIs
+    # work there too.
+    api_params:
+      temperature: 0.0
+  permission:
+    policy:
+      defaultPolicy: allow
+      # introspection is the ONLY plugin force-added regardless of
+      # profile.plugins (per shared/jaato_runtime.py:_get_essential_plugins
+      # — needed for deferred-tool-loading machinery).  We don't want the
+      # agent calling discovery tools — schema arrives with the tool
+      # definition, and prefetch carries the rest — so blacklist its two
+      # exposed tools.  All other tools the agent shouldn't see (todo,
+      # subagent, references, memory, etc.) are excluded by simply not
+      # listing those plugins in profile.plugins above.
+      blacklist:
+        tools:
+          - list_tools
+          - get_tool_schemas
+        patterns: []
+runtime_limits:
+  tool_timeout_seconds: 30
+  memory_max_mb: 256
+  max_output_bytes: 65536
+env: {}

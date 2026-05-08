@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "manual_writer completion",
+  "description": "Lightweight terminal marker — the manual section CONTENT lives in the .md file the agent wrote/updated; this payload only records what was done so the cascade can audit and the next run knows the prior outcome.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "feature_id": {
+      "type": "string",
+      "description": "Stable identifier echoed from agent_params."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable section heading echoed from agent_params."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["created", "updated", "no_change"],
+      "description": "Outcome — created (cold-start writeNewFile), updated (warm-start updateFile), or no_change (scene matched prior, nothing written)."
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Workspace-relative path the agent wrote to (typically `manual/20-walkthrough-<feature_id>.md`)."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-sentence summary of what changed (for audit logs)."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Advisory notes — capture was empty, file was unwriteable, scene didn't match expectation, etc."
+    },
+    "errors": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Hard failures the agent recovered from."
+    }
+  },
+  "required": ["feature_id", "decision"]
+}
