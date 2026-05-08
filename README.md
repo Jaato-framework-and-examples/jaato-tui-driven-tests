@@ -10,10 +10,11 @@ not a synthesized mockup — it's the jaato TUI documenting itself.
 ## Quickstart
 
 ```bash
-# 1. Run from a Python env where jaato-sdk + pyyaml are importable.
-#    Typically the same venv where jaato-server / jaato-tui are
-#    installed editable — e.g. /tmp/jaato-test/ in the canonical
-#    dev setup.
+# 1. Activate a Python env that has jaato-sdk available (typically the
+#    same venv where jaato-server / jaato-tui live as editable installs;
+#    in the canonical dev setup that's /tmp/jaato-test/).  Then install
+#    the harness itself:
+pip install -e .
 
 # 2. Install system deps (one-shot; see `harness doctor` for the full list).
 sudo apt install -y \
@@ -21,10 +22,10 @@ sudo apt install -y \
     fonts-dejavu-core fonts-freefont-ttf
 
 # 3. Verify everything is wired.
-python -m harness doctor
+jaato-manual doctor          # or: python -m harness doctor
 
 # 4. Generate the manual end-to-end.
-python -m harness all
+jaato-manual all             # or: python -m harness all
 # → build/tui-user-manual.pdf
 ```
 

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jaato-tui-driven-tests"
+version = "0.1.0"
+description = "Self-documenting harness for the jaato TUI — drives the live client through a manifest of features, captures scenes, and renders to PDF."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-Proprietary"
+authors = [
+    {name = "apanoia"}
+]
+keywords = ["jaato", "tui", "harness", "documentation", "pdf"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    # SDK is the public surface used by the walker (IPCClient, events,
+    # ClientType).  In the canonical dev setup this is already present
+    # as an editable install in the shared jaato venv (/tmp/jaato-test/).
+    "jaato-sdk",
+    # PyYAML drives manifest.yaml parsing in the walker.
+    "pyyaml",
+]
+
+[project.scripts]
+# Console-script alias for `python -m harness`.  After `pip install -e .`,
+# `jaato-manual <step>` works on PATH from any directory.
+jaato-manual = "harness.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["harness*"]
