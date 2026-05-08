@@ -31,5 +31,7 @@ Thumbs.db
 manual/.payloads/
 manual/20-walkthrough-*.md
 
-# Build outputs (PDF + assembled markdown) — derived from manual/.
-build/
+# Build outputs — the assembled intermediate markdown is regenerated per
+# run (just `manual/*.md` concatenated with page breaks), but the final
+# PDF is committed so reviewers can read the manual without rebuilding.
+build/*.md
