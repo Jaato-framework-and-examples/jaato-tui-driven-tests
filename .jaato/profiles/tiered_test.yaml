@@ -1,0 +1,50 @@
+name: tiered_test
+description: >-
+  Demonstration profile for per-turn model tier switching.  Three tiers
+  (planner / dispatcher / executor) all backed by claude-haiku-4.5 — the
+  point is to document the tier-switching MECHANISM, not to demonstrate
+  capability differences across tiers.  Operators copying this profile
+  for production use should wire planner → opus / dispatcher → sonnet /
+  executor → haiku per their cost/quality envelope.
+provider: openrouter
+model_tiers:
+  planner: anthropic/claude-haiku-4.5
+  dispatcher: anthropic/claude-haiku-4.5
+  executor: anthropic/claude-haiku-4.5
+  initial: dispatcher
+max_turns: 8
+gc:
+  type: budget
+  threshold_percent: 80.0
+  target_percent: 60.0
+  pressure_percent: 0
+  preserve_recent_turns: 3
+  notify_on_gc: false
+plugins:
+  - cli(preload)
+  - file_edit
+plugin_configs:
+  openrouter:
+    api_params:
+      temperature: 0.0
+  permission:
+    policy:
+      # ``ask`` so permission prompts SURFACE in the TUI when the model
+      # invokes tools — the documenter agent then observes those prompts
+      # via tmux capture-pane and chooses how to respond (allow / deny /
+      # document the flow).  The whole point of the harness is to drive
+      # and document the user-visible TUI experience, including permission
+      # gates.  Use ``allow`` here only if a feature explicitly does not
+      # want prompts in its capture (e.g. a screen-only walkthrough that
+      # never invokes tools).
+      defaultPolicy: ask
+      blacklist:
+        tools:
+          - list_tools
+          - get_tool_schemas
+        patterns: []
+runtime_limits:
+  tool_timeout_seconds: 30
+  memory_max_mb: 256
+  max_output_bytes: 65536
+env: {}

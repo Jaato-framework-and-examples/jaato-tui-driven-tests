@@ -38,41 +38,87 @@ them in order.
 |-------|--------------|---------|
 | `doctor` | Probe every Python + system dep, print availability table.  Exit 0 if all present, 1 otherwise. | stdout report |
 | `inventory` | Walk the live framework via the SDK and emit reference catalogs (keybindings, slash commands, plugins, tools, profile knobs). | `manual/1*-catalog-*.md` |
-| `walk` | Drive the TUI through `harness/manifest.yaml` via tmux, capture each feature's scene, dispatch the `manual_writer` agent with a typed completion payload, render the chapter via the reactor. | `manual/20-walkthrough-*.md`, `manual/.payloads/*.json` |
+| `walk` | Spawn the TUI under `manifest.tui_profile`; for each feature, spawn a `documenter` agent with the feature brief in `agent_params`; the agent autonomously drives the TUI via tmux and writes the manual section. | `manual/20-walkthrough-*.md`, `manual/.payloads/*.json` |
 | `build` | Concatenate sections (page-break separated), render to PDF via pandoc + xelatex with full Unicode font fallback. | `build/tui-user-manual.{md,pdf}` |
 
 `doctor` is the right command to run first when something doesn't work.
 
+## How `walk` works
+
+The harness is **LLM-driven**: the manifest is *prefetch context* for
+an autonomous documenter agent, not a keystroke script.  Per feature:
+
+1. Walker creates a fresh `documenter` agent session via the SDK.
+2. The feature's `goal` / `context_hints` / tmux pane / feature_id /
+   title are passed as `agent_params` and rendered into the agent's
+   system prompt by `.jaato/scripts/prefetch_documenter_brief.py`.
+3. Walker sends a kickoff message; the agent's turn loop starts.
+4. The agent has the `cli` plugin — it shells out to `tmux
+   capture-pane -p -t <pane>` to observe the TUI, and `tmux send-keys
+   -t <pane> ...` to drive it.  It decides every keystroke.
+5. The TUI's permission policy is `defaultPolicy: ask` (in the
+   `tiered_test` profile) so prompts surface naturally.  The agent
+   observes them via capture-pane and responds with `y` / `n` / etc.
+6. When the agent has enough material, it writes the manual section
+   via `writeNewFile` / `updateFile` and emits `signal_completion`.
+7. A reactor records an audit sidecar at `manual/.payloads/<id>.json`.
+
+Between features, the walker types `reset` into the TUI to clear
+conversation history (no process restart — same TUI, fresh slate).
+If the agent accidentally kills the TUI, the walker re-launches.
+
 ## Adding a feature
 
-Edit `harness/manifest.yaml` and append a new entry:
+Edit `harness/manifest.yaml` and append:
 
 ```yaml
 - id: my-new-feature                # snake-case; .md filename suffix
   title: "What this section is called"
-  pre_setup:                        # optional — run before trigger
-    - sleep: 1
-  trigger:                          # demonstrate the feature
-    - send: "C-x"
-    - wait_for: "Some unique anchor on screen"
-  capture:
-    history: 0                      # scrollback lines (0 = visible only)
-  cleanup:                          # try/finally — runs even on failure
-    - send: "C-x"
+  goal: >-
+    Free-form English brief — what to cover in the chapter.  This is
+    the documenter agent's authoritative context (passed via
+    agent_params, embedded in the persona via a prefetch).
+  context_hints: >-
+    Optional: extra guidance when the feature is non-obvious — what
+    keystrokes open it, what to look for, what NOT to capture.  The
+    agent uses these as a starting point but is free to deviate based
+    on what it observes.
 ```
 
-Then re-run `python -m harness walk` (or `all` to also rebuild the PDF).
-The walker writes a new `manual/20-walkthrough-my-new-feature.md` plus
-an audit sidecar at `manual/.payloads/my-new-feature.json`.
+Re-run `python -m harness walk` (or `all` to also rebuild the PDF).
+The walker spawns a documenter agent for the new feature; the agent
+explores the TUI, writes `manual/20-walkthrough-my-new-feature.md`
+directly via `file_edit`, emits `signal_completion`, and a reactor
+records the audit sidecar at `manual/.payloads/my-new-feature.json`.
 
-The supported step grammar:
+The manifest's only top-level setting today is `tui_profile:` — the
+profile the TUI runs under for the whole walker pass.  Defaults to
+`tiered_test` (model_tiers + cli + file_edit + permission ask).
+Override per workspace by editing the manifest.
 
-| Step | Effect |
-|------|--------|
-| `send: <text-or-key>` | Type text, then press Enter (the standard input pattern). |
-| `send_raw: <text>` | Type text without pressing Enter (for prompts that submit on first keystroke). |
-| `wait_for: <substring>` | Poll `tmux capture-pane` until *substring* appears, with a timeout. |
-| `sleep: <seconds>` | Wait, no input. |
+### When the documenter struggles
+
+The agent is autonomous but not infallible — Anthropic Haiku is the
+default model for the `documenter` profile (cost-efficient).  Symptoms
+to watch for:
+
+- **Agent picks the wrong feature angle** — refine the `goal` to
+  point the agent at the specific UI surface.  E.g., "Document the
+  `/model` slash command" vs "Document per-turn tier switching" are
+  different features even though both relate to "models".
+- **Agent kills the TUI** — the persona forbids `Ctrl+D` and the
+  exit-menu's `e`/`d` choices, but a confused agent may still type
+  destructive sequences.  Walker auto-relaunches the TUI on
+  `_reset_tui` failure between features, so the run completes; the
+  failed feature's chapter may be stale.
+- **Agent claims missing context** — usually a one-off; re-run.
+  Confirm `agent_params` are reaching the prefetch by reading
+  `.jaato/scripts/prefetch_documenter_brief.py` and adding a
+  diagnostic log line.
+
+If a feature consistently fails the LLM-driven path, you can fall
+back to the older `manual_writer` flow (which expects a pre-captured
+scene).  See `.jaato/agents/manual_writer.md` for that persona.
 
 ## Layout
 
@@ -83,7 +129,7 @@ jaato-tui-driven-tests/
 │   ├── deps.py             dep probes + per-phase gates
 │   ├── manifest.yaml       what features to capture (extend this!)
 │   ├── inventory.py        reference-catalog generator
-│   ├── walker.py           tmux driver + per-feature scene capture
+│   ├── walker.py           single-TUI lifecycle + per-feature documenter spawn
 │   ├── tmux_driver.py      send-keys / capture-pane primitives
 │   └── pdf_builder.py      pandoc invocation + font fallback config
 ├── manual/                 ← manual sources (mix of committed + generated)

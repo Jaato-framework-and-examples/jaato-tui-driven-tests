@@ -22,6 +22,14 @@ Thumbs.db
 .jaato/waypoints.json
 .jaato/.artifact_tracker.json
 
+# Template-plugin artifacts.  Cross-tenant leak observed 2026-05-08:
+# kb-enablement-2.0's cascade wrote java-codegen template content into
+# this workspace's .jaato/templates/ during a harness run.  Template
+# plugin path doesn't go through the workspace_root ContextVar fix;
+# tracked as a separate backlog item.  Until fixed, treat these as
+# untrustworthy and don't commit.
+.jaato/templates/
+
 # Auth tokens persisted by provider plugins — never commit.
 .jaato/*_auth.json
 

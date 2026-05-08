@@ -1,0 +1,41 @@
+name: documenter
+description: >-
+  Autonomous TUI documenter — given a high-level brief for ONE feature,
+  drives the running TUI via tmux (cli plugin), observes the result,
+  then writes / updates the manual section file directly via file_edit.
+  Companion to manual_writer (which receives a pre-captured scene).
+model: anthropic/claude-haiku-4.5
+provider: openrouter
+max_turns: 30
+gc:
+  type: budget
+  threshold_percent: 80.0
+  target_percent: 60.0
+  pressure_percent: 0
+  preserve_recent_turns: 5
+  notify_on_gc: false
+plugins:
+  # cli is preloaded — the documenter calls tmux capture-pane / send-keys
+  # via cli for every TUI interaction.  No fallback.
+  - cli(preload)
+  # file_edit is preloaded — the chapter is written via writeNewFile or
+  # updateFile.  No fallback.
+  - file_edit(preload)
+completion_payload_schema: completion_schemas/manual_writer.json
+plugin_configs:
+  openrouter:
+    api_params:
+      temperature: 0.0
+  permission:
+    policy:
+      defaultPolicy: allow
+      blacklist:
+        tools:
+          - list_tools
+          - get_tool_schemas
+        patterns: []
+runtime_limits:
+  tool_timeout_seconds: 30
+  memory_max_mb: 256
+  max_output_bytes: 65536
+env: {}

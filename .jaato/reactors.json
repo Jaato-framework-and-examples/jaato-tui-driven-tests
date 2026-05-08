@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Manual generation cascade. manual_writer + (future) toc_discoverer each emit a typed payload; reactors render the markdown. The Walker spawns the sessions; markdown is a derived artifact of the typed payloads.",
+  "_comment": "Manual generation cascade. manual_writer (scene-driven) and documenter (LLM-driven) both emit a typed completion payload after writing their .md file directly via file_edit. The reactor records an audit sidecar at manual/.payloads/<feature_id>.json — useful for run-over-run drift checks and failure auditing. The .md itself lives in the file the agent wrote.",
   "rules": [
     {
       "id": "manual_writer-render-section",
@@ -8,6 +8,18 @@
       "match": {
         "event_type": "agent.completed",
         "where": "agent_id == 'manual_writer'"
+      },
+      "action": {
+        "script": "scripts/reactors/render_manual_section.py",
+        "params": {}
+      }
+    },
+    {
+      "id": "documenter-render-section",
+      "enabled": true,
+      "match": {
+        "event_type": "agent.completed",
+        "where": "agent_id == 'documenter'"
       },
       "action": {
         "script": "scripts/reactors/render_manual_section.py",

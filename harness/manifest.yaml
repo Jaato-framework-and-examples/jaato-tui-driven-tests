@@ -1,78 +1,114 @@
-# Walkthrough feature manifest — small first-cut scope.
+# Walkthrough feature manifest (LLM-driven).
 #
-# Schema per feature:
+# Each feature describes WHAT to document; the documenter agent
+# (.jaato/agents/documenter.md) figures out HOW.  The agent has
+# the cli plugin for tmux interaction (capture-pane, send-keys) and
+# file_edit for writing the chapter.  The Walker just spawns the TUI
+# and the documenter — it does NOT prescribe keystrokes.
 #
-#   id:              stable identifier; used as the .md filename suffix
-#                    (manual/20-walkthrough-<id>.md) and the
-#                    Observation.source_feature on discovered facts.
-#                    snake-case, no spaces.
+# Per-feature schema:
+#
+#   id:              stable identifier; .md filename suffix
+#                    (manual/20-walkthrough-<id>.md). snake-case.
 #   title:           human-readable section heading.
-#   pre_setup:       (optional) steps to run BEFORE the trigger.  Same
-#                    step grammar as `trigger`.
-#   trigger:         steps that demonstrate the feature.  Each step is
-#                    one of:
-#                      send: <text-or-special-key>
-#                      send_raw: <text>      (no two-step + Enter dance)
-#                      wait_for: <substring> (poll capture-pane)
-#                      sleep: <seconds>
-#   capture:
-#     history: <int>            scrollback lines to include (0 = visible only)
-#     crop_anchors:             optional; trim capture to a region
-#       from_line_matching: <regex>
-#       to_line_matching:   <regex>
-#   cleanup:         (optional) steps to return TUI to baseline state
-#                    after capture.  Runs even on failure of trigger
-#                    (try/finally semantics in walker).
+#   goal:            free-form English brief — what the documenter
+#                    should cover.  This is the LLM's authoritative
+#                    context (passed via agent_params, embedded in the
+#                    documenter persona via {{feature_goal}}).
+#   context_hints:   (optional) extra guidance when the feature is
+#                    non-obvious — keystrokes that open it, what to
+#                    look for, what NOT to capture.  The LLM uses this
+#                    as a starting point but is free to deviate based
+#                    on what it observes.
+#
+# Top-level:
+#   tui_profile:     (optional) profile the TUI runs under for the
+#                    whole walker pass.  Defaults to ``tiered_test`` —
+#                    has model_tiers + cli + file_edit so all current
+#                    features can be documented against ONE TUI
+#                    lifecycle (no open/close churn between features).
+
+tui_profile: tiered_test
 
 features:
   - id: initial-banner
     title: "Initial TUI state — banner + prompt"
-    # No trigger; the launch_tui hook waits for "User>" before this
-    # feature's capture, so the banner is fully drawn.
-    trigger:
-      - sleep: 0.5
-    capture:
-      history: 0
+    goal: >-
+      Document what the user sees the moment the TUI starts up — the
+      header banner, the agent status indicator, the model + context
+      budget readout, the helpful guidance text, and the User> prompt.
+      Cover what each region tells you at a glance.
+    context_hints: >-
+      The TUI is already at the User> prompt when you start.  No
+      keystrokes needed; capture the visible scene and document.
 
   - id: ctrl-b-budget-panel
     title: "Ctrl+B — Budget panel (token usage by category)"
-    trigger:
-      - send: "C-b"
-      - wait_for: "Token Usage"
-      - sleep: 1
-    capture:
-      history: 0
-    cleanup:
-      # Ctrl+B is the unambiguous toggle.  ``Escape`` would do
-      # ``drill_up()`` first (per pt_display.py:handle_budget_escape) and
-      # only close the panel when already at top level — fragile if
-      # the panel happens to be drilled down.  Ctrl+B always toggles
-      # the panel off regardless of drill state.
-      - send: "C-b"
-      - sleep: 0.5
+    goal: >-
+      Document the budget panel: what each row means (source name,
+      token count, GC status, usage bar), what the GC status icons
+      mean (lock = locked-from-GC, half-circle = partial, circle =
+      ephemeral), the keyboard shortcuts at the bottom for navigation.
+    context_hints: >-
+      Open the panel with `tmux send-keys ... C-b`.  Wait for "Token
+      Usage" to appear before capturing.  Close it with another
+      `C-b` before signaling completion (don't leave the panel open
+      for the next feature).
 
   - id: exit-menu
     title: "`exit` command — Detach / end-session menu"
-    # Brief settle delay so the previous feature's panel cleanup
-    # finishes redrawing before we send the ``exit`` command —
-    # otherwise the keystrokes can land in the input box BEHIND a
-    # not-yet-dismissed panel and never reach the command parser.
-    pre_setup:
-      - sleep: 1
-    trigger:
-      - send: "exit"
-      # The exit menu's distinctive bottom-of-prompt anchor.  More
-      # reliable than ``"Exit options:"`` (header-style — wrappable)
-      # — ``Choice [`` is the Y/N-style prompt the TUI sets, always
-      # visible on its own line.
-      - wait_for: "Choice ["
-      - sleep: 0.5
-    capture:
-      history: 0
-    cleanup:
-      # 'r' = return to session (dismisses the menu without ending).
-      # ``send`` (not ``send_raw``) so the two-step text+Enter sequence
-      # fires — the Choice prompt waits for Enter to commit the answer
-      # rather than auto-submitting on the first keystroke.
-      - send: "r"
-      - wait_for: "User>"
+    goal: >-
+      Document the exit-menu — the three options (detach / end /
+      return), what each does (detach keeps the session alive on the
+      server, end deletes it, return cancels), and how to choose.
+    context_hints: >-
+      Type the literal word "exit" and submit.  The menu shows a
+      "Choice [d/e/r]:" prompt.  Capture the menu, then dismiss it
+      with "r" (return) before signaling completion.
+
+  - id: permission-prompt-flow
+    title: "Permission prompts — `y` / `n` / `a` / `t` / `i`"
+    goal: >-
+      Document the per-tool permission prompt the user sees when the
+      session's policy is `ask` (the default) and the model invokes a
+      tool the operator hasn't pre-approved.  Cover what the prompt
+      shows (tool name + arguments preview), the five response keys
+      (y once, n no, a always, t this turn, i until idle), and what
+      each choice does for the rest of the session.
+    context_hints: >-
+      Trigger a permission prompt by asking the model to run a simple
+      shell command, e.g. `Run 'ls -la' so I can see what's here`.
+      The TUI's tiered_test profile has `defaultPolicy: ask`, so the
+      cli plugin will prompt before executing.  Capture the prompt
+      verbatim — it's the visual the chapter will quote.  Then
+      respond `y` (allow once) so the demo finishes; document each
+      key's behaviour from the prompt's own help text, not from
+      memory.
+
+  - id: model-tier-switching
+    title: "Model tier switching — `enter_tier` across turns"
+    goal: >-
+      Demonstrate per-turn model tier switching (planner / dispatcher
+      / executor) and document what the user observes.  Send these
+      prompts in order; for each turn, capture what tier the model
+      was in (the budget panel shows the active tier) and quote any
+      enter_tier reasoning the model displayed:
+
+        1. "Plan how to refactor a 2000-line module that mixes HTTP
+           routing + validation + persistence — list 5 ordered steps."
+        2. "Of those 5, which two have the most coupling risk if
+           applied out of order?"
+        3. "Run `echo hello-from-tier-test` to confirm tools still
+           work, then summarize the tier you used at each turn."
+
+      Document what tier the model chose for each kind of work
+      (strategic vs coordination vs mechanical) — that's the
+      pedagogical point.
+    context_hints: >-
+      Send each prompt via `tmux send-keys ... 'text' Enter` and
+      WAIT for the model's response to finish before sending the
+      next.  A simple way to detect "response finished" is to poll
+      capture-pane until the User> prompt re-appears at the bottom.
+      Between prompts, you may want to open the budget panel
+      (Ctrl+B) to see the active tier, then close it (Ctrl+B again)
+      before continuing.
