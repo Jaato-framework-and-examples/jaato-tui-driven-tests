@@ -42,11 +42,42 @@ template — works fine, just less pretty.  Install via:
         https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/master/eisvogel.tex
 """
 
+import re
 import shutil
 import subprocess
 from datetime import date
 from pathlib import Path
 from typing import List
+
+
+# ----------------------------------------------------------------------
+# Cross-reference rewrite (build-time, lossless to the source files).
+#
+# Walkthrough sections carry a metadata comment ``<!-- jaato:feature <id>
+# -->`` and a "Related sections" list whose items are bare code spans
+# (`` `<id>` ``).  Without anchors and without link wrapping, pandoc
+# renders the related-section items as inline code — readable but not
+# clickable.  We post-process the assembled markdown so each chapter's
+# H1 gets a stable ``{#feature-<id>}`` anchor and each related-section
+# reference becomes a Markdown link to that anchor.  Pandoc's ``--toc``
+# already produces clickable TOC entries from auto-slugified header
+# IDs; this gives the chapter cross-references the same property.
+#
+# Implementation lives at build time (rather than in the source files
+# or the manual_writer agent persona) so:
+#   * source manual/*.md files stay clean Markdown without
+#     post-processing instructions baked in,
+#   * auto-generated walkthroughs benefit on the next harness run
+#     without touching the agent persona or completion schema,
+#   * the rewrite is idempotent — re-running on already-rewritten
+#     output is a no-op (regex is anchored on the unrewritten form).
+# ----------------------------------------------------------------------
+
+_FEATURE_MARKER_RE = re.compile(r"<!--\s*jaato:feature\s+([\w-]+)\s*-->")
+_H1_AFTER_MARKER_RE = re.compile(r"^(#\s+[^\n#{]+?)(\s*\{#[\w-]+\})?\s*$", re.MULTILINE)
+_RELATED_REF_RE = re.compile(
+    r"^(\s*[-*])\s+`([\w-]+)`\s*$", re.MULTILINE,
+)
 
 
 PAGE_BREAK = "\n\n\\newpage\n\n"
@@ -114,11 +145,53 @@ class PDFBuilder:
     # ------------------------------------------------------------------
 
     def _assemble_markdown(self, sections: List[Path]) -> Path:
-        """Concatenate sections with a LaTeX page break between each."""
+        """Concatenate sections with page breaks + anchor + cross-link rewrite."""
         assembled_md = self._build_dir / "tui-user-manual.md"
-        body = PAGE_BREAK.join(p.read_text() for p in sections)
+        rewritten = [self._rewrite_section_xrefs(p.read_text()) for p in sections]
+        body = PAGE_BREAK.join(rewritten)
         assembled_md.write_text(body)
         return assembled_md
+
+    @staticmethod
+    def _rewrite_section_xrefs(section: str) -> str:
+        """Inject heading anchors + convert related-section refs to links.
+
+        Two passes over a single section's markdown:
+
+        1. Find the ``<!-- jaato:feature <id> -->`` metadata marker.  If
+           present, append ``{#feature-<id>}`` to the next H1 heading
+           that doesn't already carry an explicit attribute.
+        2. Convert "Related sections" list items of the form
+           ``- `<id>` `` into ``- [<id>](#feature-<id>)`` so pandoc
+           emits a clickable link to the corresponding chapter.
+
+        Returns the rewritten section text.  When the marker is absent
+        (e.g. hand-written 00-intro / 05-getting-started chapters), the
+        section is returned unchanged.
+        """
+        marker_match = _FEATURE_MARKER_RE.search(section)
+        if not marker_match:
+            return section
+
+        feature_id = marker_match.group(1)
+        anchor = f"{{#feature-{feature_id}}}"
+
+        # Pass 1: anchor the FIRST H1 in the section (the marker tells us
+        # which feature ID to use; the heading itself sits above the
+        # marker in the source convention).  If the heading already has
+        # an explicit ``{#...}`` attribute we leave it alone
+        # (idempotency on re-runs).
+        anchored = _H1_AFTER_MARKER_RE.sub(
+            lambda m: m.group(1) + (m.group(2) or f" {anchor}"),
+            section, count=1,
+        )
+
+        # Pass 2: rewrite related-section references.  Applies to the
+        # whole section.
+        return _RELATED_REF_RE.sub(
+            lambda m: f"{m.group(1)} [{m.group(2)}](#feature-{m.group(2)})",
+            anchored,
+        )
 
     # ------------------------------------------------------------------
     # Pandoc invocation
