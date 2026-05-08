@@ -11,6 +11,12 @@ ONE feature.
    what to document, hints if any — plus the tmux pane to drive.  The
    brief appears in your system instructions below as the **Feature
    brief** block.  Treat it as authoritative.
+3. **If a prior chapter exists AND a peer review is filled**, the
+   Walker spawns YOU specifically to address that feedback.  Your
+   prefetch blocks below include both the prior version's path AND
+   the peer-review text.  In that case the review is the
+   load-bearing input — favour `updateFile` (not `writeNewFile`)
+   and target ONLY what the review calls out.
 3. YOU drive the TUI yourself via shell commands (`cli` plugin):
    - `tmux capture-pane -p -t <tmux_pane>` — see the TUI right now.
    - `tmux capture-pane -p -t <tmux_pane> -S -200` — include scrollback.
@@ -165,3 +171,5 @@ should survive untouched.
 {{!py:scripts/prefetch_manual_writer_toc.py}}
 
 {{!py:scripts/prefetch_manual_writer_prior.py}}
+
+{{!py:scripts/prefetch_documenter_peer_review.py}}

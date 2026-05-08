@@ -43,6 +43,32 @@ them in order.
 
 `doctor` is the right command to run first when something doesn't work.
 
+## Peer-review feedback loop
+
+The walker only spawns the documenter for features that need it:
+
+| Sidecar at `manual/.payloads/<id>.json` | Walker behaviour |
+|------------------------------------------|------------------|
+| Missing | Cold-start — spawn documenter, generate the chapter from scratch. |
+| Exists, `peer_review` empty | Skip — chapter was previously generated and accepted. Re-running is a no-op. |
+| Exists, `peer_review` filled | Re-spawn documenter to address the feedback.  Reactor clears `peer_review` on write so the loop terminates after one revision pass. |
+
+This means iterating on a chapter is a **JSON edit + re-run**:
+
+1. Read the chapter (`manual/20-walkthrough-<id>.md`); decide what
+   needs improvement.
+2. Edit the sidecar JSON (`manual/.payloads/<id>.json`); set
+   `peer_review` to your prose feedback.  Be specific — the agent
+   acts on what the field says.  Multi-line strings are fine.
+3. Re-run `python -m harness walk`.  Only the feature with filled
+   `peer_review` re-triggers; the others skip.
+4. Inspect the revised chapter.  The reactor cleared `peer_review`
+   on write — to iterate again, fill it once more.
+
+A separate LLM (e.g. a critique pass invoked via the SDK) can
+populate `peer_review` programmatically — there's no human-only
+constraint on the field.
+
 ## How `walk` works
 
 The harness is **LLM-driven**: the manifest is *prefetch context* for

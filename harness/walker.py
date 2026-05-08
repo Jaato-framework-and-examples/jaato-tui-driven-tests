@@ -23,6 +23,7 @@ prefetch context, not a script).
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -212,6 +213,26 @@ class Walker:
         if not goal:
             print("FAIL (feature missing 'goal:' field)")
             return
+
+        # Peer-review gate (server 0.6.71+ workflow):
+        #
+        # * No sidecar exists  → cold-start; spawn the documenter.
+        # * Sidecar exists with empty `peer_review` → previous chapter
+        #   was accepted; skip (no feedback to act on).
+        # * Sidecar exists with non-empty `peer_review` → operator (or
+        #   peer LLM) left feedback; spawn the documenter so it can
+        #   address the review.  The reactor will clear the field on
+        #   write so the loop resets.
+        sidecar = self._manual_dir / ".payloads" / f"{feature_id}.json"
+        if sidecar.is_file():
+            try:
+                data = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = {}
+            review = (data.get("peer_review") or "").strip()
+            if not review:
+                print("(skip — no peer_review feedback)")
+                return
 
         try:
             doc_session_id = await client.create_session(
