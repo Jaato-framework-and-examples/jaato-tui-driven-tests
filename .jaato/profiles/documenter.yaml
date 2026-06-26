@@ -4,9 +4,19 @@ description: >-
   drives the running TUI via tmux (cli plugin), observes the result,
   then writes / updates the manual section file directly via file_edit.
   Companion to manual_writer (which receives a pre-captured scene).
-model: anthropic/claude-haiku-4.5
+model: openai/gpt-oss-20b:free
 provider: openrouter
 max_turns: 30
+# The harness's documenter operates in a closed loop (drive TUI →
+# capture scene → write chapter → signal_completion).  The
+# user-tier / premium-tier behavioral principles
+# (Transparency Mandate, Need-to-Know Context Sharing,
+# Subagent Selection, etc.) are designed for general-purpose
+# multi-step workflows; they don't apply here and inflate the
+# system prompt by ~48 KB which slows reasoning + drives drift.
+# Suppress them to keep the prompt focused on the documenter's
+# persona + cross-persona TUI rules from `.jaato/instructions/`.
+suppress_base_instructions: true
 gc:
   type: budget
   threshold_percent: 80.0
@@ -26,6 +36,15 @@ plugin_configs:
   openrouter:
     api_params:
       temperature: 0.0
+      # Exercise OpenRouter prompt-caching (server 0.6.74+):
+      # openai/gpt-oss-* uses upstream auto-caching, so explicit
+      # cache_control breakpoints aren't stamped (the model is not
+      # in EXPLICIT_CACHE_MODEL_HINTS).  Setting cache_prompt: true
+      # still enables response-side usage parsing so the daemon
+      # ledger sees cache_read_tokens / cache_creation_tokens on
+      # subsequent turns of the same session.
+      cache_prompt: true
+      cache_ttl: "5m"
   permission:
     policy:
       defaultPolicy: allow

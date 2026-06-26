@@ -124,9 +124,10 @@ Override per workspace by editing the manifest.
 
 ### When the documenter struggles
 
-The agent is autonomous but not infallible — Anthropic Haiku is the
-default model for the `documenter` profile (cost-efficient).  Symptoms
-to watch for:
+The agent is autonomous but not infallible — the `documenter` profile
+runs a cost-efficient model (`openai/gpt-oss-20b:free` via OpenRouter;
+see `.jaato/profiles/documenter.yaml` for the authoritative value).
+Symptoms to watch for:
 
 - **Agent picks the wrong feature angle** — refine the `goal` to
   point the agent at the specific UI surface.  E.g., "Document the
@@ -185,12 +186,40 @@ diff-debugging the section ordering before pandoc renders).
 - **`build` shows "Missing character" warnings** → install
   `fonts-freefont-ttf` (FreeMono carries the emoji codepoints DejaVu
   Sans Mono lacks).
-- **Daemon not auto-starting** → `jaato-server --status` to check; if
-  stale, `jaato-server --stop` then `python -m harness walk` will
-  spawn a fresh one.
+- **Daemon not running** → the walker uses `IPCRecoveryClient` with
+  `auto_start=True`, so `python -m harness walk` will start a fresh
+  daemon itself (cold start ~30–60s) and reconnect if it restarts
+  mid-walk.  `jaato-server --status` shows an existing one.
 - **A walkthrough chapter looks wrong** → check the audit sidecar at
   `manual/.payloads/<feature-id>.json` to see the LLM's typed
   completion payload before the reactor rendered it.
+
+## Validating `.jaato/` assets against the framework
+
+`jaato-scaffold` introspects the **installed** framework — it's the
+source of truth for current profile/agent patterns, not guesswork.
+Run it from the daemon's venv:
+
+```bash
+JAATO=../jaato
+PYTHONPATH=$JAATO/jaato-server /tmp/jaato-test/bin/python -m shared.scaffold validate .
+# explain <scope> to interrogate the framework (plugins | profile | tiers | env | paths)
+# new client --recoverable to compare harness/ against the current SDK-client scaffold
+```
+
+Patterns this workspace follows (all current): `plugins:` (not the
+deprecated `tools:`); personas in `.jaato/agents/<name>.md` (not
+inline `system_instructions:`); provider knobs under
+`plugin_configs.<provider>.api_params:`; `model_tiers` with an
+`initial:` tier (no redundant top-level `model:`); reactors kept
+workspace-local in `.jaato/` (never force-installed to the shared
+daemon-global `~/.jaato`).
+
+**Scope note:** `validate .` discovers profiles from the daemon-global
+`~/.jaato/profiles/` registry too, so it reports on profiles that
+aren't in this repo.  Use `--profile documenter|manual_writer|tiered_test`
+to check only this workspace's profiles; findings on other profiles
+(global/premium) aren't this repo's to fix.
 
 ## See also
 

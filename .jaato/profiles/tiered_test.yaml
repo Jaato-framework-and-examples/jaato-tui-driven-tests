@@ -7,12 +7,22 @@ description: >-
   for production use should wire planner → opus / dispatcher → sonnet /
   executor → haiku per their cost/quality envelope.
 provider: openrouter
+# No top-level `model:` — model_tiers is non-empty, so the framework
+# silently ignores `model` (confirmed via `jaato-scaffold explain profile`)
+# and selects the active model per turn from model_tiers[<active_tier>].
+# The starting model is governed by the `initial:` control key below.
 model_tiers:
-  planner: anthropic/claude-haiku-4.5
-  dispatcher: anthropic/claude-haiku-4.5
-  executor: anthropic/claude-haiku-4.5
+  planner: openai/gpt-oss-20b:free
+  dispatcher: openai/gpt-oss-20b:free
+  executor: openai/gpt-oss-20b:free
   initial: dispatcher
 max_turns: 8
+# This profile drives the TUI session that the documenter is
+# documenting.  The general-purpose behavioral principles distract
+# the model from the demo prompts — suppress them so the model can
+# react cleanly to the documenter's prompts and exhibit the
+# tier-switching behavior the chapter is supposed to capture.
+suppress_base_instructions: true
 gc:
   type: budget
   threshold_percent: 80.0
@@ -27,6 +37,11 @@ plugin_configs:
   openrouter:
     api_params:
       temperature: 0.0
+      # OpenRouter prompt-caching (server 0.6.74+).  openai/gpt-oss-*
+      # uses upstream auto-caching, so this knob enables response-side
+      # usage parsing for cache_read_tokens visibility.
+      cache_prompt: true
+      cache_ttl: "5m"
   permission:
     policy:
       # ``ask`` so permission prompts SURFACE in the TUI when the model

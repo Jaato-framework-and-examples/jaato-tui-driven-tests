@@ -3,9 +3,14 @@ description: >-
   Reads a TUI scene capture from its initial prompt and emits a typed
   documentation payload.  A reactor renders the markdown.  Single-shot
   (max_turns=1) — body-wired determinism stack.
-model: anthropic/claude-haiku-4.5
+model: openai/gpt-oss-20b:free
 provider: openrouter
 max_turns: 6
+# Same rationale as the documenter profile: this agent operates in
+# a tight closed loop (read scene → readFile → updateFile →
+# signal_completion).  The general-purpose behavioral principles
+# don't apply and inflate the prompt unnecessarily.
+suppress_base_instructions: true
 gc:
   type: budget
   threshold_percent: 80.0
@@ -18,12 +23,17 @@ plugins:
 completion_payload_schema: completion_schemas/manual_writer.json
 plugin_configs:
   openrouter:
-    # api_key not set here — JAATO_OPENROUTER_API_KEY in the workspace
-    # .env (resolved via pass://) is the canonical source.  Server 0.6.64
+    # api_key not set here — JAATO_OPENROUTER_API_KEY in the workspace .env
+    # (resolved via pass://) is the canonical source.  Server 0.6.74
     # made .env values pass through expand_variables so secret URIs
     # work there too.
     api_params:
       temperature: 0.0
+      # OpenRouter prompt-caching (server 0.6.74+).  openai/gpt-oss-*
+      # uses upstream auto-caching, so this knob mostly enables
+      # response-side usage parsing (cache_read_tokens visibility).
+      cache_prompt: true
+      cache_ttl: "5m"
   permission:
     policy:
       defaultPolicy: allow

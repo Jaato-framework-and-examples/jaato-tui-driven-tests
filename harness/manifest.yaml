@@ -88,27 +88,59 @@ features:
   - id: model-tier-switching
     title: "Model tier switching — `enter_tier` across turns"
     goal: >-
-      Demonstrate per-turn model tier switching (planner / dispatcher
-      / executor) and document what the user observes.  Send these
-      prompts in order; for each turn, capture what tier the model
-      was in (the budget panel shows the active tier) and quote any
-      enter_tier reasoning the model displayed:
+      Document the per-turn model-tier-switching mechanism:
+      `enter_tier(planner)` / `enter_tier(dispatcher)` /
+      `enter_tier(executor)` is a TOOL THE TUI'S MODEL CALLS ITSELF
+      to swap which sub-model handles the current turn (planner = most
+      capable, dispatcher = default coordinator, executor = cheapest
+      mechanical tier).  This is NOT the user-facing `/model` slash
+      command — that switches models for the rest of the session, is
+      operator-driven, and is a different feature.
 
-        1. "Plan how to refactor a 2000-line module that mixes HTTP
-           routing + validation + persistence — list 5 ordered steps."
-        2. "Of those 5, which two have the most coupling risk if
+      What you (the documenter) do: send a sequence of three user
+      prompts to the TUI's input box (via `tmux send-keys`) that
+      vary in nature — strategic / coordination / mechanical — and
+      observe what tier the TUI's model picks for each.  Then write
+      the chapter.
+
+      Procedure (literal — do exactly this):
+
+        1. Type and submit (via `tmux send-keys -t <pane> 'prompt'
+           Enter`) the prompt:
+           "Plan how to refactor a 2000-line module that mixes HTTP
+           routing + validation + persistence — list 5 ordered
+           steps."
+           Wait for the model's response.  Capture the pane.  The
+           tier the model used is shown in the budget panel
+           (toggle with Ctrl+B), in the agent header line.
+        2. Type and submit:
+           "Of those 5, which two have the most coupling risk if
            applied out of order?"
-        3. "Run `echo hello-from-tier-test` to confirm tools still
+           Wait, capture, note the tier.
+        3. Type and submit:
+           "Run `echo hello-from-tier-test` to confirm tools still
            work, then summarize the tier you used at each turn."
+           Wait, capture, note the tier.  The model's own
+           summary in its final response is the most useful single
+           quote for the chapter.
 
-      Document what tier the model chose for each kind of work
-      (strategic vs coordination vs mechanical) — that's the
-      pedagogical point.
+      Then write a chapter that:
+      - Names the three tiers and their intended use.
+      - Quotes ONE meaningful capture-pane snippet showing the tier
+        in the budget panel OR in the model's narration.
+      - Explains the operator-side configuration (profile-level
+        `model_tiers:` map; V1 same-provider constraint).
+      - Includes the model's self-summary from prompt 3 as a
+        Notes bullet — that's the model speaking about its own
+        tier choices.
     context_hints: >-
-      Send each prompt via `tmux send-keys ... 'text' Enter` and
-      WAIT for the model's response to finish before sending the
-      next.  A simple way to detect "response finished" is to poll
-      capture-pane until the User> prompt re-appears at the bottom.
-      Between prompts, you may want to open the budget panel
-      (Ctrl+B) to see the active tier, then close it (Ctrl+B again)
-      before continuing.
+      The TUI is running under the `tiered_test` profile, which
+      configures three tiers (planner / dispatcher / executor) all
+      backed by claude-haiku-4.5 in this demo.  The TUI's model has
+      `enter_tier` exposed; YOU do not.  YOUR job is just to send
+      the three prompts above and observe what happens.
+
+      Between prompts, wait for the User> prompt to reappear before
+      sending the next — that signals the previous turn finished.
+      Ctrl+B opens the budget panel where the active tier is
+      visible.  Ctrl+B again closes it.
