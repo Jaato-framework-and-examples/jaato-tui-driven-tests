@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from jaato_sdk import ClientType, IPCRecoveryClient
+from jaato_sdk import ClientType, ConnectionState, IPCRecoveryClient
 from jaato_sdk.events import (
     AgentCompletedEvent,
     AgentStatusChangedEvent,
@@ -67,18 +67,15 @@ class Walker:
         """
         print(f"\n    [conn] {getattr(status, 'state', status)}", flush=True)
 
-    async def _run_async(self) -> None:
-        # IPCRecoveryClient (not plain IPCClient): the walk is a
-        # long-lived driver (minutes, one documenter session per feature,
-        # retry storms) — the SDK's recommended client for anything
-        # long-lived.  auto_start=True removes the "daemon must already be
-        # running" precondition; the recovery state machine rides through
-        # a daemon restart and reattaches.  (The separately-launched TUI
-        # is a distinct process: if the daemon restarts mid-feature the
-        # TUI dies, but the run loop's _clear_tui already relaunches a
-        # dead TUI before the next feature, so the two resiliencies
-        # compose.)
-        client = IPCRecoveryClient(
+    def _new_client(self) -> IPCRecoveryClient:
+        """Construct the recovery client with the harness's known-good knobs.
+
+        IPCRecoveryClient (not plain IPCClient): the walk is a long-lived
+        driver (minutes, one documenter session per feature).  auto_start
+        removes the "daemon must already be running" precondition and the
+        recovery state machine rides through a daemon restart.
+        """
+        return IPCRecoveryClient(
             self._socket,
             client_type=ClientType.API,
             auto_start=True,
@@ -86,8 +83,41 @@ class Walker:
             workspace_path=WORKSPACE,
             on_status_change=self._on_conn,
         )
-        # Cold autostart of the daemon is ~30-60s; give connect headroom.
-        if not await client.connect(timeout=120.0):
+
+    async def _ensure_connected(
+        self, client: Optional[IPCRecoveryClient],
+    ) -> Optional[IPCRecoveryClient]:
+        """Return a CONNECTED recovery client, rebuilding a dead one.
+
+        The recovery client rides through transient blips itself, but a
+        reconnect that exhausts its retries lands in the terminal CLOSED
+        state, from which it cannot be revived.  When that happens between
+        features, discard it and build a fresh one so the remaining
+        features still run — a mid-walk connection drop then costs at most
+        the one feature it happened on, not the rest of the walk.  Returns
+        None only when a brand-new client also can't connect (daemon truly
+        unreachable).  Cold autostart is ~30-60s, so connect() gets
+        headroom.
+        """
+        if client is not None and client.state == ConnectionState.CONNECTED:
+            return client
+        if client is not None:
+            print(
+                f"\n    ! client not CONNECTED ({client.state.name}) — "
+                "rebuilding", end="", flush=True,
+            )
+            try:
+                await client.close()
+            except Exception:
+                pass
+        fresh = self._new_client()
+        if not await fresh.connect(timeout=120.0):
+            return None
+        return fresh
+
+    async def _run_async(self) -> None:
+        client = await self._ensure_connected(None)
+        if client is None:
             raise RuntimeError(
                 f"could not connect to (or autostart) the daemon at "
                 f"{self._socket} — run `python -m harness doctor` and "
@@ -111,9 +141,27 @@ class Walker:
                 try:
                     features = self._manifest.get("features", [])
                     for index, feature in enumerate(features):
-                        if index > 0:
-                            self._clear_tui(drv, tui_profile)
+                        # Per-feature isolation: nothing in here may abort
+                        # the whole walk.  TUI clear/relaunch, client
+                        # re-establishment, and the documenter run are ALL
+                        # inside this try — a failure marks the ONE feature
+                        # FAILED and the loop moves on (previously a
+                        # _clear_tui relaunch failure escaped and killed the
+                        # entire run).
                         try:
+                            if index > 0:
+                                self._clear_tui(drv, tui_profile)
+                            # A mid-walk drop can leave the recovery client
+                            # in terminal CLOSED; rebuild it before driving
+                            # so a single connection loss doesn't doom the
+                            # remaining features.
+                            client = await self._ensure_connected(client)
+                            if client is None:
+                                print(
+                                    "FAIL (daemon unreachable — could not "
+                                    "re-establish the client)"
+                                )
+                                continue
                             await self._drive_feature(
                                 drv, client, feature, tmux_pane=tmux_pane,
                             )
@@ -122,14 +170,16 @@ class Walker:
                 finally:
                     self._exit_tui(drv)
         finally:
-            try:
-                # Terminal shutdown of the recovery client — close() marks
-                # it permanently CLOSED (cancels any in-flight reconnection),
-                # the right end-of-run teardown vs disconnect() which leaves
-                # it reattachable.
-                await client.close()
-            except Exception:
-                pass
+            # Terminal shutdown of the recovery client — close() marks it
+            # permanently CLOSED (cancels any in-flight reconnection), the
+            # right end-of-run teardown vs disconnect() which leaves it
+            # reattachable.  Guarded: the per-feature reconnect can leave
+            # `client` None if the daemon became unreachable mid-walk.
+            if client is not None:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # TUI lifecycle
