@@ -136,7 +136,7 @@ features:
     context_hints: >-
       The TUI is running under the `tiered_test` profile, which
       configures three tiers (planner / dispatcher / executor) all
-      backed by claude-haiku-4.5 in this demo.  The TUI's model has
+      backed by openai/gpt-oss-20b:free in this demo.  The TUI's model has
       `enter_tier` exposed; YOU do not.  YOUR job is just to send
       the three prompts above and observe what happens.
 
@@ -144,3 +144,155 @@ features:
       sending the next — that signals the previous turn finished.
       Ctrl+B opens the budget panel where the active tier is
       visible.  Ctrl+B again closes it.
+
+  - id: help-command
+    title: "`help` — In-TUI command reference"
+    goal: >-
+      Document the `help` command: what it lists (client commands like
+      stop / clear / reset / export, server/plugin commands, and the
+      session subcommands), and how the help output is organized.
+      Cover that `help` is the entry point for discovering everything
+      else the TUI can do.
+    context_hints: >-
+      Type the literal word "help" and submit.  The output may span
+      several lines — capture with scrollback (`tmux capture-pane -p
+      -t <pane> -S -200`) if it doesn't all fit.  There is no panel to
+      close; the help text stays in the conversation log.
+
+  - id: conversation-commands
+    title: "Conversation commands — stop / clear / reset / export"
+    goal: >-
+      Document the four conversation-control commands and how they
+      differ: `stop` (interrupt the model mid-generation), `clear`
+      (clear the visible output panel only — conversation history is
+      preserved), `reset` (clear the conversation history itself — a
+      fresh slate), and `export` (write the session to a file).
+      Emphasize the clear-vs-reset distinction — the most common point
+      of confusion.
+    context_hints: >-
+      These are typed commands (submit each with Enter).  Demonstrate
+      `clear` and `reset` (both safe).  For `stop` you may have no live
+      generation to interrupt — document its purpose from the help
+      text rather than forcing a long generation.  For `export`, run
+      it and note where the file is written.  Capture the User> prompt
+      state after each so the reader sees the effect.
+
+  - id: plan-panel
+    title: "Ctrl+P — Plan panel (the model's step plan)"
+    goal: >-
+      Document the plan panel: what it shows (the model's current
+      multi-step plan with per-step status), how steps are marked
+      (pending / in-progress / done), and how to open and close it.
+    context_hints: >-
+      The plan panel is empty unless the model has created a plan.
+      First elicit one: send a prompt asking the model to plan a
+      multi-step task (e.g. "Make a 4-step plan to add a CONTRIBUTING
+      file, then start step 1").  Wait for the plan, then open the
+      panel with `C-p`, wait for it to render, capture it, and close
+      it with `C-p` before signaling completion.
+
+  - id: tool-output-views
+    title: "Tool output — Ctrl+T panel, Ctrl+N navigation, Ctrl+O popup"
+    goal: >-
+      Document how the user inspects what tools the model ran:
+      `Ctrl+T` toggles the tools panel, `Ctrl+N` enters tool-output
+      navigation mode (Right/Left expand/collapse a tool's output, Esc
+      exits), and `Ctrl+O` cycles the tool-output popup between running
+      tools.  Cover what each surface is for.
+    context_hints: >-
+      These need tool activity to show anything.  First elicit a tool
+      call: ask the model to run a shell command (e.g. "Run `ls -la`
+      and show me the output") and approve the permission prompt with
+      `y`.  Then `C-t` to open the tools panel, capture it; try `C-n`
+      and expand a tool with Right, capture.  Exit cleanly (Esc, then
+      `C-t`) before signaling completion.
+
+  - id: workspace-panel
+    title: "Ctrl+W — Workspace file panel"
+    goal: >-
+      Document the workspace file panel: what it lists (files in the
+      session workspace) and its per-entry actions — open in external
+      editor (Enter), open a diff (d), paste the selected path as an
+      @reference into the input (Esc then p), add/remove from
+      .gitignore (i), and hide an entry (h).  Cover navigation
+      (Up/Down) and closing (Ctrl+W).
+    context_hints: >-
+      Open with `C-w`; the panel lists workspace files.  Capture it
+      with the action hints visible.  Demonstrate Up/Down navigation,
+      but do NOT press Enter (it launches an external editor and would
+      block the pane) — document the actions from the panel's own
+      footer instead.  Close with `C-w` before signaling completion.
+
+  - id: search-mode
+    title: "Ctrl+F — Search the conversation"
+    goal: >-
+      Document search mode: `Ctrl+F` opens it, typing a query finds
+      matches in the conversation/output, Enter jumps to the next
+      match, Ctrl+P to the previous, and Esc closes search.  Cover
+      what the match highlighting looks like.
+    context_hints: >-
+      Search needs conversation content to match.  First send a short
+      prompt and let the model reply so there is text to search.  Then
+      `C-f`, type a word you know appears in the reply, capture the
+      search UI with a highlighted match, then Esc to close before
+      signaling completion.
+
+  - id: external-editor
+    title: "Ctrl+G — Compose input in $EDITOR"
+    goal: >-
+      Document the external-editor feature: `Ctrl+G` opens the current
+      input buffer in the user's $EDITOR for composing long or
+      multi-line messages; on save, the edited text returns to the
+      input box.  Cover when this is useful (long prompts, pasting
+      structured text).
+    context_hints: >-
+      Launching $EDITOR from inside the harness can block the pane, so
+      do NOT commit to a full editor round-trip.  Type some text into
+      the input first, capture the input box, and document the binding
+      + behaviour from the help/keybindings rather than forcing the
+      editor open.  Keep the TUI at the User> prompt before signaling
+      completion.
+
+  - id: yank-copy
+    title: "Ctrl+Y — Yank (copy) the last response"
+    goal: >-
+      Document the yank feature: `Ctrl+Y` copies the model's last
+      response to the system clipboard.  Cover what gets copied (the
+      most recent response) and any on-screen confirmation.
+    context_hints: >-
+      Yank needs a prior model response.  First send a short prompt
+      and wait for the reply.  Then press `C-y` and capture any
+      confirmation the TUI shows.  Clipboard contents can't be
+      captured, so document the action + confirmation, not the
+      clipboard itself.
+
+  - id: agent-tabs-and-panes
+    title: "Ctrl+A — Agent tabs, and split panes"
+    goal: >-
+      Document the multi-agent UI: the agent tab bar, `Ctrl+A` to
+      cycle between active agents, and splitting the view into panes
+      (Esc then s) to watch more than one agent at once.  Cover what
+      the tab bar shows (agent names / status) and when multiple
+      agents appear.
+    context_hints: >-
+      Multiple agents/panes only appear with more than one active
+      agent, which may not be the case in this demo session.  Capture
+      the agent tab bar as it is; if only one agent is present,
+      document the cycling/split bindings and note they come into play
+      with multi-agent sessions.  Return to a single pane before
+      signaling completion.
+
+  - id: session-management
+    title: "`session` — list / new / attach / delete"
+    goal: >-
+      Document the `session` command family: `session list` (show all
+      sessions on the server), `session new` (create a fresh session),
+      `session attach <id>` (switch to an existing session), and
+      `session delete <id>` (remove one).  Cover how sessions persist
+      on the server independently of the client.
+    context_hints: >-
+      `session list` is safe and informative — run it and capture the
+      list.  Demonstrate `session new` if safe.  Be careful with
+      `session delete` — only delete a session you created in this
+      run, never the active one.  Document attach/delete from the list
+      output + help text rather than risking the live session.
