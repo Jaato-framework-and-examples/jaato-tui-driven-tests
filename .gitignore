@@ -44,3 +44,4 @@ manual/20-walkthrough-*.md
 # run (just `manual/*.md` concatenated with page breaks), but the final
 # PDF is committed so reviewers can read the manual without rebuilding.
 build/*.md
+.jaato
