@@ -24,9 +24,9 @@ completion_payload_schema: completion_schemas/manual_writer.json
 plugin_configs:
   openrouter:
     # api_key not set here — JAATO_OPENROUTER_API_KEY in the workspace .env
-    # (resolved via pass://) is the canonical source.  Server 0.6.74
-    # made .env values pass through expand_variables so secret URIs
-    # work there too.
+    # is the canonical source (the openrouter provider reads it directly).
+    # Set it to your literal key (public-checkout friendly). A pass:// value
+    # there needs the jaato-premium resolver — see .env.example.
     api_params:
       temperature: 0.0
       # OpenRouter prompt-caching (server 0.6.74+).  openai/gpt-oss-*

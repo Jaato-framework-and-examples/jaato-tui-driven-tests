@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 *.egg-info/
 
+# Local env holds a LIVE provider credential — never commit it.
+# The committed template is .env.example; `cp .env.example .env` and fill in.
+.env
+!.env.example
+
 # IDE / editor caches
 .idea/
 .vscode/
