@@ -21,13 +21,27 @@ sudo apt install -y \
     tmux pandoc texlive-xetex texlive-fonts-extra \
     fonts-dejavu-core fonts-freefont-ttf
 
-# 3. Verify everything is wired.
+# 3. Provider credentials: copy the template and add your OpenRouter key.
+cp .env.example .env
+#    then edit .env and set JAATO_OPENROUTER_API_KEY=sk-or-...
+#    (.env is git-ignored; the openrouter provider reads that var directly.)
+
+# 4. Verify everything is wired.
 jaato-manual doctor          # or: python -m harness doctor
 
-# 4. Generate the manual end-to-end.
+# 5. Generate the manual end-to-end.
 jaato-manual all             # or: python -m harness all
 # → build/tui-user-manual.pdf
 ```
+
+> **⚠️ Credentials & jaato-premium.** `.env` supplies
+> `JAATO_OPENROUTER_API_KEY` as a plain env var. The `.env` used to set it to a
+> `pass://` secret URI, but that scheme is resolved only by the private
+> **jaato-premium** package — on a public checkout it fails **silently** (jaato
+> logs a warning and sends the literal `pass://…` string to OpenRouter as the
+> key). Use the plain-key form. If you have jaato-premium you can switch back to
+> `pass://` — see `.env.example` and the
+> [org-wide note](https://github.com/Jaato-framework-and-examples/.github/blob/main/profile/README.md#-providers-and-api-keys-in-these-examples--read-this-first).
 
 ## Pipeline
 
